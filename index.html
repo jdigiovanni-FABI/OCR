@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manifest — Tracking Number Scanner</title>
+<meta name="description" content="Drop package label photos in and pull FedEx tracking numbers out. Runs entirely in your browser — nothing is uploaded.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar__inner">
+    <div class="brand">
+      <span class="brand__mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="26" height="26">
+          <rect x="2" y="6" width="28" height="20" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/>
+          <line x1="2" y1="13" x2="30" y2="13" stroke="currentColor" stroke-width="2"/>
+          <line x1="7" y1="19" x2="19" y2="19" stroke="currentColor" stroke-width="2"/>
+          <line x1="7" y1="23" x2="15" y2="23" stroke="currentColor" stroke-width="1.5"/>
+        </svg>
+      </span>
+      <div class="brand__text">
+        <p class="brand__eyebrow">Local OCR · nothing leaves this tab</p>
+        <h1 class="brand__title">Manifest<span class="brand__title-thin">Scan</span></h1>
+      </div>
+    </div>
+    <div class="topbar__stats">
+      <div class="stat">
+        <span class="stat__num" id="statPhotos">0</span>
+        <span class="stat__label">photos read</span>
+      </div>
+      <div class="stat">
+        <span class="stat__num" id="statNumbers">0</span>
+        <span class="stat__label">numbers found</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="layout">
+
+  <section class="panel panel--intake" aria-labelledby="intakeHeading">
+    <h2 id="intakeHeading" class="panel__heading">01 · Load photos</h2>
+
+    <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-describedby="dropzoneHint">
+      <input type="file" id="fileInput" accept="image/*" multiple hidden>
+      <div class="dropzone__scanbeam" aria-hidden="true"></div>
+      <svg class="dropzone__icon" viewBox="0 0 48 48" width="40" height="40" aria-hidden="true">
+        <path d="M24 6v24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        <path d="M14 20l10 10 10-10" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M8 34v4a2 2 0 002 2h28a2 2 0 002-2v-4" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      </svg>
+      <p class="dropzone__title">Drag label photos here, or tap to choose</p>
+      <p id="dropzoneHint" class="dropzone__hint">JPG, PNG, HEIC · one or many at once · processed on this device only</p>
+    </div>
+
+    <div class="length-lock">
+      <label for="lengthOverride">Expected digit length</label>
+      <div class="length-lock__control">
+        <select id="lengthOverride">
+          <option value="auto" selected>Auto-detect</option>
+          <option value="12">12 digits</option>
+          <option value="15">15 digits</option>
+          <option value="20">20 digits</option>
+          <option value="22">22 digits</option>
+          <option value="34">34 digits</option>
+        </select>
+        <span id="lengthDetected" class="length-lock__detected">—</span>
+      </div>
+      <p class="length-lock__note">Since every number here is a FedEx tracking ID, they should all share one length. Anything shorter or longer gets flagged for a second look.</p>
+    </div>
+
+    <ol id="queue" class="queue" aria-label="Photo queue"></ol>
+  </section>
+
+  <section class="panel panel--manifest" aria-labelledby="manifestHeading">
+    <div class="manifest__header">
+      <h2 id="manifestHeading" class="panel__heading">02 · Manifest</h2>
+      <div class="manifest__actions">
+        <button type="button" id="btnCopyAll" class="btn btn--ghost" disabled>Copy all</button>
+        <button type="button" id="btnExportCsv" class="btn btn--ghost" disabled>Export CSV</button>
+        <button type="button" id="btnClear" class="btn btn--ghost btn--danger" disabled>Clear</button>
+      </div>
+    </div>
+
+    <div id="manifestEmpty" class="manifest__empty">
+      <p>Nothing scanned yet.</p>
+      <p class="manifest__empty-sub">Tracking numbers will line up here as soon as a photo finishes reading.</p>
+    </div>
+
+    <div class="manifest__table-wrap">
+      <table id="manifestTable" class="manifest__table" hidden>
+        <thead>
+          <tr>
+            <th scope="col" class="col-line">No.</th>
+            <th scope="col" class="col-src">Source photo</th>
+            <th scope="col" class="col-num">Tracking number</th>
+            <th scope="col" class="col-len">Digits</th>
+            <th scope="col" class="col-status">Status</th>
+            <th scope="col" class="col-actions"><span class="sr-only">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody id="manifestBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <p>Every photo is read in your browser using an on-device OCR model. No image or extracted number is ever sent anywhere — close the tab and it's gone.</p>
+</footer>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
