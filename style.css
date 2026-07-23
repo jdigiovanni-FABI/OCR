@@ -171,6 +171,19 @@ a { color: inherit; }
 
 .panel--manifest .panel__heading { margin: 0; }
 
+/* ---------- Engine status banner ---------- */
+
+.engine-status {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: 3px;
+  background: var(--flag-bg);
+  color: var(--flag);
+  border: 1px solid rgba(180, 56, 31, 0.3);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
 /* ---------- Dropzone ---------- */
 
 .dropzone {

@@ -32,6 +32,7 @@
   const btnExportCsv = document.getElementById('btnExportCsv');
   const btnClear = document.getElementById('btnClear');
   const toastEl = document.getElementById('toast');
+  const engineStatus = document.getElementById('engineStatus');
 
   // ---------------------------------------------------------------
   // OCR worker
@@ -39,9 +40,17 @@
   function ensureWorker() {
     if (workerReady) return workerReady;
     workerReady = (async () => {
-      worker = await Tesseract.createWorker('eng');
-      return worker;
-    })();
+      if (typeof Tesseract === 'undefined') {
+        throw new Error('OCR library did not load (check your internet connection or an ad/content blocker)');
+      }
+      const w = await Tesseract.createWorker('eng');
+      worker = w;
+      return w;
+    })().catch((err) => {
+      // Don't cache a permanently-broken promise — let the next photo retry.
+      workerReady = null;
+      throw err;
+    });
     return workerReady;
   }
 
@@ -291,18 +300,39 @@
   // File handling
   // ---------------------------------------------------------------
   function handleFiles(fileList) {
-    const files = Array.from(fileList).filter(f => f.type.startsWith('image/'));
+    const files = Array.from(fileList).filter(f => f.type.startsWith('image/') || isLikelyHeic(f));
     if (files.length === 0) return;
     files.forEach(queuePhoto);
   }
 
+  function isLikelyHeic(file) {
+    const type = (file.type || '').toLowerCase();
+    if (type.includes('heic') || type.includes('heif')) return true;
+    const name = (file.name || '').toLowerCase();
+    return name.endsWith('.heic') || name.endsWith('.heif');
+  }
+
   function queuePhoto(file) {
     const id = 'p' + Math.random().toString(36).slice(2, 10);
-    const thumbUrl = URL.createObjectURL(file);
+    let thumbUrl;
+    try {
+      thumbUrl = URL.createObjectURL(file);
+    } catch (e) {
+      thumbUrl = '';
+    }
     const photo = { id, name: file.name, thumbUrl, status: 'pending', error: null };
     state.photos.push(photo);
     renderQueue();
     updateStats();
+
+    if (isLikelyHeic(file)) {
+      photo.status = 'error';
+      photo.error = 'HEIC photos aren\u2019t readable in-browser yet — share/export as JPEG or PNG first';
+      renderQueue();
+      updateStats();
+      return;
+    }
+
     processPhoto(photo, file);
   }
 
@@ -311,9 +341,10 @@
     renderQueue();
     dropzone.classList.add('is-scanning');
     try {
-      const bitmap = await downscaleImage(file);
+      const source = await downscaleImage(file);
       const w = await ensureWorker();
-      const { data } = await w.recognize(bitmap);
+      engineStatus.hidden = true;
+      const { data } = await w.recognize(source);
       const candidates = extractCandidates(data.text || '');
 
       for (const value of candidates) {
@@ -330,9 +361,9 @@
       markDuplicates();
       photo.status = 'done';
     } catch (err) {
-      console.error(err);
+      console.error('OCR failed for', photo.name, err);
       photo.status = 'error';
-      photo.error = 'Could not read photo';
+      photo.error = describeError(err);
     } finally {
       renderQueue();
       renderManifest();
@@ -344,19 +375,38 @@
     }
   }
 
+  function describeError(err) {
+    const msg = (err && err.message) ? err.message : String(err || '');
+    if (/did not load|fetch|network/i.test(msg)) {
+      return 'OCR engine failed to load — check your connection or an ad/content blocker, then reload';
+    }
+    if (/decode|source width|source height|createImageBitmap/i.test(msg)) {
+      return 'Could not read this image format — try re-saving it as JPEG or PNG';
+    }
+    return msg ? `Could not read photo — ${msg}` : 'Could not read photo';
+  }
+
   // Downscale large photos on a canvas before OCR — keeps everything
   // in-memory (no upload) and speeds up recognition on big camera photos.
+  // Falls back to handing Tesseract the original file if the browser
+  // can't decode it onto a canvas (Tesseract's own decoder sometimes
+  // succeeds on files createImageBitmap rejects).
   async function downscaleImage(file) {
     const MAX_DIM = 2000;
-    const imgBitmap = await createImageBitmap(file);
-    const scale = Math.min(1, MAX_DIM / Math.max(imgBitmap.width, imgBitmap.height));
-    if (scale === 1) return imgBitmap;
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(imgBitmap.width * scale);
-    canvas.height = Math.round(imgBitmap.height * scale);
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(imgBitmap, 0, 0, canvas.width, canvas.height);
-    return canvas;
+    try {
+      const imgBitmap = await createImageBitmap(file);
+      const scale = Math.min(1, MAX_DIM / Math.max(imgBitmap.width, imgBitmap.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(imgBitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(imgBitmap.height * scale));
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(imgBitmap, 0, 0, canvas.width, canvas.height);
+      imgBitmap.close && imgBitmap.close();
+      return canvas;
+    } catch (err) {
+      console.warn('Downscale skipped, passing original file to OCR engine', err);
+      return file;
+    }
   }
 
   // ---------------------------------------------------------------
@@ -442,6 +492,19 @@
   });
 
   // Warm the OCR worker as soon as the page loads so the first photo
-  // does not wait on model download + init.
-  ensureWorker();
+  // does not wait on model download + init. If this fails outright
+  // (CDN blocked, no network, etc.) surface it clearly rather than
+  // letting every photo fail with a generic error one at a time.
+  ensureWorker()
+    .then(() => {
+      engineStatus.hidden = true;
+    })
+    .catch((err) => {
+      console.error('OCR engine failed to initialize', err);
+      engineStatus.hidden = false;
+      engineStatus.textContent =
+        'The OCR engine could not load, so photos can\u2019t be read yet. ' +
+        'This usually means the page can\u2019t reach cdn.jsdelivr.net — check your connection, ' +
+        'disable any ad/content blocker for this site, then reload the page.';
+    });
 })();
