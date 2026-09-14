@@ -1,4 +1,4 @@
-# ManifestScan — FedEx Tracking Number Reader
+# ManifestScan FedEx Tracking Number Reader
 
 A small static web app: drag in photos of package labels, and it reads
 every **"Tracking ID"** it finds and lists the numbers next to it — built
@@ -77,12 +77,3 @@ static files plus a CDN-hosted OCR library.
 | `index.html` | Page structure and layout |
 | `style.css` | Visual design |
 | `app.js` | Drag-and-drop intake, OCR orchestration, extraction logic, manifest UI |
-
-## Notes on accuracy
-
-OCR on phone photos is never perfect — glare, blur, and low light all
-hurt accuracy. A few things that help:
-- Fill the frame with the label and keep it flat/in-focus.
-- Good, even lighting (avoid glare across the barcode/number).
-- If a number comes out with an obviously wrong digit count, it'll be
-  flagged in the manifest — click into the field and correct it by hand.
